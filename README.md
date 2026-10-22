@@ -34,6 +34,7 @@ app/                      the demo UI (anon_demo.py) and its launcher (run_demo.
 jobs/                     anonymize_dataset.sbatch: a dataset folder on a Slurm cluster
 env/                      setup: cluster (setup_envs.sh, stage_models.sh), laptop (local/)
 refs/hi/                  12 anonymous Hindi target voices (6 male, 6 female) + manifest.json with their gender
+docs/                     the quality and time report (pdf) and the cluster guide (docs/cluster/)
 ```
 
 ## Setup
