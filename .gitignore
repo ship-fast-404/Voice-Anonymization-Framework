@@ -1,0 +1,24 @@
+# environments, model caches, run outputs (at the project root)
+/envs/
+/repos/
+/hf_cache/
+/models/
+/runs/
+/results/
+/data/
+.myenv/
+.vscode/
+__pycache__/
+*.pyc
+*.log
+# audio never goes to the repository, except the target voices in refs/
+*.wav
+*.mp3
+*.flac
+*.zip
+!refs/**/*.wav
+/dataset/
+/dataset_anonymized/
+*_anonymized/
+# per-machine run settings: override configs/run.env and stay local
+configs/run.local.env
