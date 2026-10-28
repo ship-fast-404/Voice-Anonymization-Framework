@@ -524,12 +524,15 @@ def place(canvas, seg, start, fade=160):
 
 
 def estimate_f0_hz(w16, max_sec=60):
-    """Median voiced F0 (Hz) of a (1, N) 16 kHz tensor; energy-gated autocorrelation pitch tracker. None if unvoiced."""
+    """Median voiced F0 (Hz) of a (1, N) 16 kHz tensor; energy-gated autocorrelation pitch tracker. None if unvoiced.
+    The clip is scaled to its peak first, so the voiced-frame gate is relative to the clip's own level (a quiet
+    recording, RMS ~0.01, would otherwise have no frame above the gate and no pitch at all)."""
     import torch
     import torchaudio
     x = w16[:, : 16000 * max_sec].detach().float().cpu()
     if x.size(-1) < 16000:
         return None
+    x = x / (x.abs().max() + 1e-8) * 0.9
     try:
         f0 = torchaudio.functional.detect_pitch_frequency(x, 16000, frame_time=0.02, freq_low=60, freq_high=500)[0]
     except Exception:
@@ -1083,6 +1086,11 @@ def main():
         rec["ref_pool"] = pool_name
         ref_emb = {r: (eng.refs[r]["style2"].detach().float().squeeze().cpu().numpy() if eng.refs[r].get("style2") is not None else None)
                    for r in pool} if args.ref_strategy == "timbre_far" else None
+        for s in speakers:
+            if spk_gender.get(s) is None and args.ref_strategy in ("pitch", "pitch_far", "cross", "timbre_far"):
+                log(f"CHECK {key}: speaker {s} has no measurable pitch (silent or unvoiced): its gender is unknown and "
+                    f"the target voice is not gender-matched")
+                rec.setdefault("check", []).append(f"{s}: pitch unknown, target gender not enforced")
         ref_map = choose_refs(pool, speakers, key, args.ref_strategy, spk_f0,
                               {r: eng.refs[r]["f0_hz"] for r in pool}, spk_gender, ref_gender, ref_source,
                               spk_emb=spk_emb if args.ref_strategy == "timbre_far" else None, ref_emb=ref_emb)
