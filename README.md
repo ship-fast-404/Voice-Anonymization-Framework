@@ -77,3 +77,7 @@ src/        diarize.py, anonymize.py, anonymize_dataset.py, build_ref_pool.py (a
 
 [Seed-VC](https://github.com/Plachtaa/seed-vc) (voice conversion), [DiariZen](https://github.com/BUTSpeechFIT/DiariZen)
 (diarization), CAM++ (speaker embedding), Whisper-small (language ID), BigVGAN (vocoder).
+
+## License
+
+[MIT](LICENSE). The models and the Seed-VC and DiariZen code it builds on keep their own licenses.
