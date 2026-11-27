@@ -26,6 +26,20 @@ def main():
     import torch
     _orig = torch.load
     torch.load = lambda *a, **k: _orig(*a, **{**k, "weights_only": False})
+    import torchaudio  # torchaudio>=2.9: TorchCodec-based load()/info() and no AudioMetaData -> soundfile fallback
+    if not hasattr(torchaudio, "AudioMetaData"):
+        class AudioMetaData:
+            def __init__(self, sample_rate, num_frames, num_channels, bits_per_sample=16, encoding="PCM_S"):
+                self.sample_rate, self.num_frames, self.num_channels = sample_rate, num_frames, num_channels
+                self.bits_per_sample, self.encoding = bits_per_sample, encoding
+        torchaudio.AudioMetaData = AudioMetaData
+    try:
+        import torchcodec  # noqa: F401
+    except Exception:
+        import soundfile as sf
+        torchaudio.load = lambda path, *a, **k: (torch.from_numpy(sf.read(path, dtype="float32", always_2d=True)[0].T.copy()),
+                                                 sf.info(path).samplerate)
+        torchaudio.info = lambda path, *a, **k: (lambda i: torchaudio.AudioMetaData(i.samplerate, i.frames, i.channels))(sf.info(path))
 
     from huggingface_hub import snapshot_download, hf_hub_download
     Path(args.cache_dir).mkdir(parents=True, exist_ok=True)

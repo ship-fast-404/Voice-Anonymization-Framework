@@ -61,6 +61,40 @@ def _patch_torch_load():
     torch.load = _load
 
 
+def _patch_torchaudio_load():
+    """torchaudio>=2.9 routes torchaudio.load()/info() through TorchCodec (which has no build matching torch on every
+    platform, e.g. aarch64) and dropped torchaudio.AudioMetaData (imported by pyannote's training code at module level).
+    When TorchCodec is missing, read wavs with soundfile instead (same (waveform[channels, samples], sample_rate)
+    result) and provide the metadata class."""
+    import torchaudio
+    try:
+        import torchcodec  # noqa: F401
+        has_codec = True
+    except Exception:
+        has_codec = False
+    if not hasattr(torchaudio, "AudioMetaData"):
+        class AudioMetaData:
+            def __init__(self, sample_rate, num_frames, num_channels, bits_per_sample=16, encoding="PCM_S"):
+                self.sample_rate, self.num_frames, self.num_channels = sample_rate, num_frames, num_channels
+                self.bits_per_sample, self.encoding = bits_per_sample, encoding
+        torchaudio.AudioMetaData = AudioMetaData
+    if has_codec:
+        return
+    import torch
+    import soundfile as sf
+
+    def _load(path, *a, **k):
+        x, sr = sf.read(path, dtype="float32", always_2d=True)
+        return torch.from_numpy(x.T.copy()), sr
+
+    def _info(path, *a, **k):
+        i = sf.info(path)
+        return torchaudio.AudioMetaData(i.samplerate, i.frames, i.channels)
+
+    torchaudio.load = _load
+    torchaudio.info = _info
+
+
 def build_pipeline(args, rttm_out_dir):
     from diarizen.pipelines.inference import DiariZenPipeline
     overrides = any(v is not None for v in (args.max_speakers, args.min_speakers, args.num_speakers, args.batch_size))
@@ -158,6 +192,7 @@ def compute_der(ref_rttm, hyp_ann, uri):
 def main():
     args = parse_args()
     _patch_torch_load()
+    _patch_torchaudio_load()
     import torch
 
     log_dir = Path(args.log_dir)

@@ -2,9 +2,12 @@
 # Sourced by every script: makes `conda` and `source activate` available.
 # Order: $CONDA_MODULE if set -> common module names -> conda binaries under /opt/ohpc/pub/apps -> conda already on PATH.
 _conda_hook() {
-  # define the `conda` shell function for this session only (no `conda init`, which the cluster guide forbids)
+  # define the `conda` shell function for this session only (no `conda init`, which the cluster guide forbids).
+  # conda's shell functions are not `set -u` safe (the job scripts run with set -u): suspend it while they load.
   command -v conda >/dev/null 2>&1 || return 0
+  local _u=""; [[ $- == *u* ]] && _u=1; set +u
   eval "$(conda shell.bash hook 2>/dev/null)" 2>/dev/null || true
+  [ -n "$_u" ] && set -u; return 0
 }
 _load_conda() {
   if command -v module >/dev/null 2>&1; then
@@ -22,7 +25,7 @@ _load_conda() {
            /opt/ohpc/pub/apps/anaconda3 /opt/ohpc/pub/apps/*conda* /opt/ohpc/pub/apps/*forge* /opt/*conda* /opt/*forge* $HOME/miniforge3 $HOME/miniconda3; do
     if [ -f "$c/etc/profile.d/conda.sh" ]; then
       # shellcheck disable=SC1090
-      source "$c/etc/profile.d/conda.sh"; export PATH="$c/bin:$PATH"; echo "conda via $c"; return 0
+      source "$c/etc/profile.d/conda.sh"; export PATH="$c/bin:$PATH"; echo "conda via $c"; _conda_hook; return 0
     fi
   done
   command -v conda >/dev/null 2>&1 && { echo "conda already on PATH: $(command -v conda)"; _conda_hook; return 0; }
@@ -32,8 +35,12 @@ _load_conda() {
 _load_conda
 # `source activate` is deprecated in new conda; provide a shim that works with both
 activate_env() {
-  if conda activate "$1" 2>/dev/null; then return 0; fi
-  if source activate "$1" 2>/dev/null; then return 0; fi
+  # `conda activate` / `source activate` can return 0 without activating (no shell hook loaded): check python moved.
+  # Activation runs with `set -u` suspended (conda's shell functions reference unset variables).
+  local _u=""; [[ $- == *u* ]] && _u=1; set +u
+  if conda activate "$1" 2>/dev/null && [ "$(command -v python)" = "$1/bin/python" ]; then [ -n "$_u" ] && set -u; return 0; fi
+  if source activate "$1" 2>/dev/null && [ "$(command -v python)" = "$1/bin/python" ]; then [ -n "$_u" ] && set -u; return 0; fi
+  [ -n "$_u" ] && set -u
   # last resort: put the env's bin first on PATH (works for python/pip, which is all we need)
   export PATH="$1/bin:$PATH"; export CONDA_PREFIX="$1"
   [ -x "$1/bin/python" ] || { echo "ERROR: cannot activate env $1" >&2; return 1; }
